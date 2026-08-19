@@ -1,0 +1,10 @@
+.build/
+DerivedData/
+*.dmg
+.DS_Store
+dist/
+*.app
+Icon.iconset/
+Resources/AppIcon.icns
+Resources/AppIcon.png
+Resources/dmg-background.png
