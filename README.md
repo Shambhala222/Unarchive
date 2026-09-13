@@ -1,4 +1,4 @@
-# Unarchive
+# Unarchive (MacOS Silicon)
 
 Mac app for opening and packing archives. Native, Apple Silicon, macOS 14 or later.
 
