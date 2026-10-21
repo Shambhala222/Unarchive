@@ -4,7 +4,7 @@ Mac app for opening and packing archives. Native, Apple Silicon, macOS 14 or lat
 
 Made by [Shambhala222](https://github.com/Shambhala222).
 
-It reads RAR (split volumes and encrypted RAR 5 included), ZIP, 7z, TAR, GZ, BZ2, XZ, ISO, CAB, LHA and a few others. You can look through the contents, extract, drag files into Finder, and create ZIP, 7z or TAR.
+It reads RAR (split volumes and encrypted RAR 5 included), ZIP, 7z, TAR, GZ, BZ2, XZ, ISO, CAB, LHA and a few others. You can look through the contents, extract, drag files into Finder, and create ZIP, 7z, RAR or TAR. RAR creating uses the rar program installed on the Mac. ZIP, 7z and RAR can be split into parts.
 
 RAR goes through UnRAR. 7z extract uses 7-Zip. Everything else uses The Unarchiver. Archive Utility is left out of it on purpose.
 

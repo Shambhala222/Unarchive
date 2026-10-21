@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum AppLanguage: String, CaseIterable, Identifiable {
-    case system, en, de, fr, es, it, pt, nl, pl, ja, zh
+    case system, en, de, fr, es, it, pt, nl, pl, ru, ja, zh
     var id: String { rawValue }
 
     var displayName: String {
@@ -17,6 +17,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case .pt: return "Português"
         case .nl: return "Nederlands"
         case .pl: return "Polski"
+        case .ru: return "Русский"
         case .ja: return "日本語"
         case .zh: return "简体中文"
         }
@@ -27,7 +28,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         if stored != AppLanguage.system.rawValue { return stored }
         let preferred = Locale.preferredLanguages.first ?? "en"
         let prefix = String(preferred.prefix(2)).lowercased()
-        let supported = ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ja", "zh"]
+        let supported = ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "ja", "zh"]
         return supported.contains(prefix) ? prefix : "en"
     }
 }
@@ -54,13 +55,14 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 }
 
 enum CreateFormat: String, CaseIterable, Identifiable {
-    case zip, sevenZip, tar, tarGz, tarBz2, tarXz
+    case zip, sevenZip, rar, tar, tarGz, tarBz2, tarXz
     var id: String { rawValue }
 
     var fileExtension: String {
         switch self {
         case .zip: return "zip"
         case .sevenZip: return "7z"
+        case .rar: return "rar"
         case .tar: return "tar"
         case .tarGz: return "tar.gz"
         case .tarBz2: return "tar.bz2"
@@ -72,6 +74,7 @@ enum CreateFormat: String, CaseIterable, Identifiable {
         switch self {
         case .zip: return "ZIP"
         case .sevenZip: return "7z"
+        case .rar: return "RAR"
         case .tar: return "TAR"
         case .tarGz: return "TAR.GZ"
         case .tarBz2: return "TAR.BZ2"
@@ -79,16 +82,32 @@ enum CreateFormat: String, CaseIterable, Identifiable {
         }
     }
 
+    var supportsSplit: Bool {
+        switch self {
+        case .zip, .sevenZip, .rar: return true
+        case .tar, .tarGz, .tarBz2, .tarXz: return false
+        }
+    }
+
     var contentType: UTType {
         switch self {
         case .zip: return .zip
         case .sevenZip: return UTType(filenameExtension: "7z") ?? .data
+        case .rar: return UTType(filenameExtension: "rar") ?? .data
         case .tar: return UTType(filenameExtension: "tar") ?? .data
         case .tarGz: return UTType(filenameExtension: "gz") ?? .data
         case .tarBz2: return UTType(filenameExtension: "bz2") ?? .data
         case .tarXz: return UTType(filenameExtension: "xz") ?? .data
         }
     }
+}
+
+enum PartUnit: String, CaseIterable, Identifiable {
+    case mb, gb
+    var id: String { rawValue }
+    var title: String { self == .mb ? "MB" : "GB" }
+    /// 1 MB = 1024 × 1024 Bytes, 1 GB = 1024 MB.
+    var bytes: Int64 { self == .mb ? 1_048_576 : 1_073_741_824 }
 }
 
 enum L10n {
@@ -101,7 +120,7 @@ enum L10n {
 
     private static let tables: [String: [String: String]] = [
         "en": en, "de": de, "fr": fr, "es": es, "it": it,
-        "pt": pt, "nl": nl, "pl": pl, "ja": ja, "zh": zh
+        "pt": pt, "nl": nl, "pl": pl, "ru": ru, "ja": ja, "zh": zh
     ]
 
     private static let en: [String: String] = [
@@ -197,12 +216,34 @@ enum L10n {
         "create.save": "Save Archive",
         "create.failed": "The archive could not be created.",
         "create.done": "Archive created.",
+        "create.format": "This archive is saved as %@.",
+        "create.where": "Save in",
+        "create.pickfolder": "Choose Folder…",
+        "create.sources": "Contents",
+        "create.replace": "A file with this name is already there. It will be replaced.",
+        "formats.pack.hint": "Click a format to create an archive.",
+        "split.title": "Parts",
+        "split.none": "One file",
+        "split.several": "Several parts",
+        "split.size": "Part size",
+        "split.note": "Parts are available for ZIP, 7z and RAR. TAR stays one file.",
+        "split.binary": "1 GB = 1024 MB.",
+        "split.example": "Parts look like %@.",
+        "recent.clear": "Clear",
+        "rar.missing": "RAR is not installed on this Mac. Unarchive does not include the RAR program.",
+        "rar.level": "Compression is fast. Files still shrink, and it finishes much sooner than the strongest level.",
+        "packed.parts": "Archive created as %d parts in %@.",
+        "create.inside": "The archive can't be saved inside the folder being packed.",
+        "create.empty": "Nothing left to pack.",
         "column.name": "Name",
         "column.size": "Size",
         "column.packed": "Packed",
         "column.date": "Modified",
         "reading": "Reading archive…",
         "extracting": "Extracting…",
+        "packing": "Packing…",
+        "pack.cancel": "Stop packing",
+        "packed.to.time": "Archive created at “%@” in %@.",
         "preparing": "Preparing file…",
         "testing": "Testing archive…",
         "extracted.to": "Finished extracting to “%@”.",
@@ -217,6 +258,11 @@ enum L10n {
         "progress.elapsed": "Elapsed %@",
         "progress.eta": "About %@ left",
         "progress.eta.wait": "Calculating remaining time…",
+        "progress.expected": "Expected size",
+        "progress.about": "about %@",
+        "progress.speed": "Speed",
+        "progress.source": "Contents",
+        "progress.written": "Written %@",
         "progress.finishing": "Finishing…",
         "progress.volume": "Reading %@",
         "test.ok": "The archive tested successfully. All files are intact.",
@@ -225,7 +271,7 @@ enum L10n {
         "default.fail": "macOS did not change the default. Right-click a RAR file → Open With → Unarchive → Always.",
         "close.archive": "Close",
         "choose.folder": "Choose Destination",
-        "pack.note": "Create ZIP, 7z, TAR, TAR.GZ, TAR.BZ2 or TAR.XZ. RAR packing is not included because that format is proprietary.",
+        "pack.note": "Create ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2 or TAR.XZ. RAR uses the rar program installed on this Mac. Unarchive does not include it.",
         "feature.multiselect": "Multi-select and drag files into Finder",
         "feature.password": "Password prompt for protected archives",
         "feature.context": "Right-click to extract, preview or inspect",
@@ -333,12 +379,34 @@ enum L10n {
         "create.save": "Archiv speichern",
         "create.failed": "Das Archiv konnte nicht erstellt werden.",
         "create.done": "Archiv erstellt.",
+        "create.format": "Dieses Archiv wird als %@ gespeichert.",
+        "create.where": "Speichern in",
+        "create.pickfolder": "Ordner wählen…",
+        "create.sources": "Inhalt",
+        "create.replace": "Eine Datei mit diesem Namen liegt schon dort. Sie wird ersetzt.",
+        "formats.pack.hint": "Klick auf ein Format erstellt ein Archiv.",
+        "split.title": "Teile",
+        "split.none": "Eine Datei",
+        "split.several": "Mehrere Teile",
+        "split.size": "Teilgröße",
+        "split.note": "Teile gibt es für ZIP, 7z und RAR. TAR bleibt eine Datei.",
+        "split.binary": "1 GB = 1024 MB.",
+        "split.example": "Teile sehen so aus: %@.",
+        "recent.clear": "Leeren",
+        "rar.missing": "RAR ist auf diesem Mac nicht installiert. Unarchive liefert das RAR-Programm nicht mit.",
+        "rar.level": "Kompression ist schnell. Dateien werden trotzdem kleiner, und es ist viel früher fertig als die stärkste Stufe.",
+        "packed.parts": "Archiv erstellt, %d Teile, in %@.",
+        "create.inside": "Das Archiv kann nicht in dem Ordner liegen, der gerade gepackt wird.",
+        "create.empty": "Nach dem Überspringen der macOS-Zusatzdateien ist nichts mehr zum Packen übrig.",
         "column.name": "Name",
         "column.size": "Größe",
         "column.packed": "Gepackt",
         "column.date": "Geändert",
         "reading": "Archiv wird gelesen…",
         "extracting": "Entpacken…",
+        "packing": "Packen…",
+        "pack.cancel": "Packen abbrechen",
+        "packed.to.time": "Archiv erstellt: „%@“ in %@.",
         "preparing": "Datei wird vorbereitet…",
         "testing": "Archiv wird geprüft…",
         "extracted.to": "Fertig entpackt nach „%@“.",
@@ -353,6 +421,11 @@ enum L10n {
         "progress.elapsed": "Dauer %@",
         "progress.eta": "Noch ca. %@",
         "progress.eta.wait": "Restzeit wird ermittelt…",
+        "progress.expected": "Erwartete Größe",
+        "progress.about": "ca. %@",
+        "progress.speed": "Tempo",
+        "progress.source": "Inhalt",
+        "progress.written": "Geschrieben %@",
         "progress.finishing": "Abschluss…",
         "progress.volume": "Lese %@",
         "test.ok": "Prüfung erfolgreich. Das Archiv ist in Ordnung.",
@@ -361,7 +434,7 @@ enum L10n {
         "default.fail": "macOS hat die Zuordnung nicht übernommen. Rechtsklick auf eine RAR-Datei → Öffnen mit → Unarchive → Immer.",
         "close.archive": "Schließen",
         "choose.folder": "Zielordner wählen",
-        "pack.note": "Erstelle ZIP, 7z, TAR, TAR.GZ, TAR.BZ2 oder TAR.XZ. RAR-Packen ist nicht enthalten, weil das Format proprietär ist.",
+        "pack.note": "Erstelle ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2 oder TAR.XZ. RAR benutzt das rar-Programm auf diesem Mac. Unarchive liefert es nicht mit.",
         "feature.multiselect": "Mehrfachauswahl und Drag & Drop in den Finder",
         "feature.password": "Passwortabfrage für geschützte Archive",
         "feature.context": "Rechtsklick zum Entpacken, Anzeigen oder Prüfen",
@@ -414,13 +487,18 @@ enum L10n {
         "create.save": "Enregistrer l’archive", "create.failed": "Impossible de créer l’archive.",
         "create.done": "Archive créée.", "column.name": "Nom", "column.size": "Taille",
         "column.packed": "Compressé", "column.date": "Modifié",
-        "reading": "Lecture de l’archive…", "extracting": "Extraction…", "preparing": "Préparation…",
+        "reading": "Lecture de l’archive…", "extracting": "Extraction…", "packing": "Compression…", "pack.cancel": "Arrêter", "preparing": "Préparation…",
         "testing": "Test de l’archive…", "extracted.to": "Extraction terminée vers « %@ ».",
         "test.ok": "Test réussi. L’archive est intacte.", "test.fail": "Le test s’est terminé avec des erreurs.\n\n%@",
         "default.ok": "Unarchive ouvre désormais les archives par double-clic.",
         "default.fail": "macOS n’a pas changé l’app par défaut. Clic droit → Ouvrir avec → Unarchive → Toujours.",
         "close.archive": "Fermer", "choose.folder": "Choisir la destination",
-        "pack.note": "Créez ZIP, 7z, TAR, TAR.GZ, TAR.BZ2 ou TAR.XZ. La création RAR n’est pas incluse (format propriétaire).",
+        "progress.file": "Fichier", "progress.to": "Destination", "progress.part": "Volume",
+        "progress.files": "fichier %d sur %d", "progress.elapsed": "Durée %@",
+        "progress.eta": "Encore environ %@", "progress.eta.wait": "Calcul du temps restant…",
+        "progress.expected": "Taille estimée", "progress.about": "environ %@",
+        "progress.speed": "Vitesse", "progress.source": "Contenu", "progress.written": "Écrit %@",
+        "pack.note": "Créez ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2 ou TAR.XZ. RAR utilise le programme rar installé sur ce Mac.",
         "feature.multiselect": "Sélection multiple et glisser-déposer vers le Finder",
         "feature.password": "Demande de mot de passe pour les archives protégées",
         "feature.context": "Clic droit pour extraire, prévisualiser ou inspecter",
@@ -470,14 +548,19 @@ enum L10n {
         "create.save": "Guardar archivo", "create.failed": "No se pudo crear el archivo.",
         "create.done": "Archivo creado.", "column.name": "Nombre", "column.size": "Tamaño",
         "column.packed": "Comprimido", "column.date": "Modificado",
-        "reading": "Leyendo archivo…", "extracting": "Extrayendo…", "preparing": "Preparando…",
+        "reading": "Leyendo archivo…", "extracting": "Extrayendo…", "packing": "Comprimiendo…", "pack.cancel": "Detener", "preparing": "Preparando…",
         "testing": "Comprobando archivo…", "extracted.to": "Extracción terminada en “%@”.",
         "test.ok": "Comprobación correcta. El archivo está intacto.",
         "test.fail": "La comprobación terminó con errores.\n\n%@",
         "default.ok": "Unarchive ahora abre archivos con doble clic.",
         "default.fail": "macOS no cambió la app predeterminada. Clic derecho → Abrir con → Unarchive → Siempre.",
         "close.archive": "Cerrar", "choose.folder": "Elegir destino",
-        "pack.note": "Crea ZIP, 7z, TAR, TAR.GZ, TAR.BZ2 o TAR.XZ. No se puede crear RAR (formato propietario).",
+        "progress.file": "Archivo", "progress.to": "Destino", "progress.part": "Parte",
+        "progress.files": "archivo %d de %d", "progress.elapsed": "Tiempo %@",
+        "progress.eta": "Quedan unos %@", "progress.eta.wait": "Calculando el tiempo restante…",
+        "progress.expected": "Tamaño previsto", "progress.about": "unos %@",
+        "progress.speed": "Velocidad", "progress.source": "Contenido", "progress.written": "Escrito %@",
+        "pack.note": "Crea ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2 o TAR.XZ. RAR usa el programa rar instalado en este Mac.",
         "feature.multiselect": "Selección múltiple y arrastrar al Finder",
         "feature.password": "Pide contraseña si el archivo está protegido",
         "feature.context": "Clic derecho para extraer, ver o inspeccionar",
@@ -527,14 +610,19 @@ enum L10n {
         "create.save": "Salva archivio", "create.failed": "Impossibile creare l’archivio.",
         "create.done": "Archivio creato.", "column.name": "Nome", "column.size": "Dimensione",
         "column.packed": "Compresso", "column.date": "Modificato",
-        "reading": "Lettura archivio…", "extracting": "Estrazione…", "preparing": "Preparazione…",
+        "reading": "Lettura archivio…", "extracting": "Estrazione…", "packing": "Compressione…", "pack.cancel": "Interrompi", "preparing": "Preparazione…",
         "testing": "Verifica archivio…", "extracted.to": "Estrazione completata in “%@”.",
         "test.ok": "Verifica riuscita. L’archivio è integro.",
         "test.fail": "La verifica è terminata con errori.\n\n%@",
         "default.ok": "Unarchive ora apre gli archivi con doppio clic.",
         "default.fail": "macOS non ha cambiato l’app predefinita. Ctrl-clic → Apri con → Unarchive → Sempre.",
         "close.archive": "Chiudi", "choose.folder": "Scegli destinazione",
-        "pack.note": "Crea ZIP, 7z, TAR, TAR.GZ, TAR.BZ2 o TAR.XZ. La creazione RAR non è inclusa (formato proprietario).",
+        "progress.file": "File", "progress.to": "Destinazione", "progress.part": "Parte",
+        "progress.files": "file %d di %d", "progress.elapsed": "Tempo %@",
+        "progress.eta": "Ancora circa %@", "progress.eta.wait": "Calcolo del tempo rimanente…",
+        "progress.expected": "Dimensione prevista", "progress.about": "circa %@",
+        "progress.speed": "Velocità", "progress.source": "Contenuto", "progress.written": "Scritto %@",
+        "pack.note": "Crea ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2 o TAR.XZ. RAR usa il programma rar installato su questo Mac.",
         "feature.multiselect": "Selezione multipla e trascinamento nel Finder",
         "feature.password": "Richiesta password per archivi protetti",
         "feature.context": "Clic destro per estrarre, aprire o ispezionare",
@@ -584,14 +672,19 @@ enum L10n {
         "create.save": "Salvar arquivo", "create.failed": "Não foi possível criar o arquivo.",
         "create.done": "Arquivo criado.", "column.name": "Nome", "column.size": "Tamanho",
         "column.packed": "Compactado", "column.date": "Modificado",
-        "reading": "Lendo arquivo…", "extracting": "Extraindo…", "preparing": "Preparando…",
+        "reading": "Lendo arquivo…", "extracting": "Extraindo…", "packing": "Compactando…", "pack.cancel": "Parar", "preparing": "Preparando…",
         "testing": "Testando arquivo…", "extracted.to": "Extração concluída em “%@”.",
         "test.ok": "Teste bem-sucedido. O arquivo está intacto.",
         "test.fail": "O teste terminou com erros.\n\n%@",
         "default.ok": "O Unarchive agora abre arquivos com duplo clique.",
         "default.fail": "O macOS não alterou o app padrão. Clique com o botão direito → Abrir com → Unarchive → Sempre.",
         "close.archive": "Fechar", "choose.folder": "Escolher destino",
-        "pack.note": "Crie ZIP, 7z, TAR, TAR.GZ, TAR.BZ2 ou TAR.XZ. Criar RAR não está incluído (formato proprietário).",
+        "progress.file": "Arquivo", "progress.to": "Destino", "progress.part": "Parte",
+        "progress.files": "arquivo %d de %d", "progress.elapsed": "Tempo %@",
+        "progress.eta": "Faltam cerca de %@", "progress.eta.wait": "Calculando o tempo restante…",
+        "progress.expected": "Tamanho previsto", "progress.about": "cerca de %@",
+        "progress.speed": "Velocidade", "progress.source": "Conteúdo", "progress.written": "Gravado %@",
+        "pack.note": "Crie ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2 ou TAR.XZ. RAR usa o programa rar instalado neste Mac.",
         "feature.multiselect": "Seleção múltipla e arrastar para o Finder",
         "feature.password": "Solicita senha em arquivos protegidos",
         "feature.context": "Clique com o botão direito para extrair, ver ou inspecionar",
@@ -641,14 +734,19 @@ enum L10n {
         "create.save": "Archief bewaren", "create.failed": "Archief kon niet worden gemaakt.",
         "create.done": "Archief gemaakt.", "column.name": "Naam", "column.size": "Grootte",
         "column.packed": "Ingepakt", "column.date": "Gewijzigd",
-        "reading": "Archief lezen…", "extracting": "Uitpakken…", "preparing": "Voorbereiden…",
+        "reading": "Archief lezen…", "extracting": "Uitpakken…", "packing": "Inpakken…", "pack.cancel": "Stoppen", "preparing": "Voorbereiden…",
         "testing": "Archief testen…", "extracted.to": "Klaar met uitpakken naar “%@”.",
         "test.ok": "Test geslaagd. Het archief is in orde.",
         "test.fail": "De test is geëindigd met fouten.\n\n%@",
         "default.ok": "Unarchive opent nu archieven met dubbelklikken.",
         "default.fail": "macOS heeft de standaard-app niet gewijzigd. Klik met Control → Openen met → Unarchive → Altijd.",
         "close.archive": "Sluiten", "choose.folder": "Kies bestemming",
-        "pack.note": "Maak ZIP, 7z, TAR, TAR.GZ, TAR.BZ2 of TAR.XZ. RAR maken zit er niet in (eigendom van derden).",
+        "progress.file": "Bestand", "progress.to": "Doel", "progress.part": "Deel",
+        "progress.files": "bestand %d van %d", "progress.elapsed": "Duur %@",
+        "progress.eta": "Nog ongeveer %@", "progress.eta.wait": "Resterende tijd berekenen…",
+        "progress.expected": "Verwachte grootte", "progress.about": "ongeveer %@",
+        "progress.speed": "Snelheid", "progress.source": "Inhoud", "progress.written": "Geschreven %@",
+        "pack.note": "Maak ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2 of TAR.XZ. RAR gebruikt het rar-programma op deze Mac.",
         "feature.multiselect": "Meerdere bestanden selecteren en naar Finder slepen",
         "feature.password": "Wachtwoordvraag bij beveiligde archieven",
         "feature.context": "Klik met Control om uit te pakken, te openen of te bekijken",
@@ -698,14 +796,19 @@ enum L10n {
         "create.save": "Zapisz archiwum", "create.failed": "Nie udało się utworzyć archiwum.",
         "create.done": "Archiwum utworzone.", "column.name": "Nazwa", "column.size": "Rozmiar",
         "column.packed": "Spakowane", "column.date": "Zmieniono",
-        "reading": "Odczyt archiwum…", "extracting": "Rozpakowywanie…", "preparing": "Przygotowywanie…",
+        "reading": "Odczyt archiwum…", "extracting": "Rozpakowywanie…", "packing": "Pakowanie…", "pack.cancel": "Zatrzymaj", "preparing": "Przygotowywanie…",
         "testing": "Testowanie archiwum…", "extracted.to": "Rozpakowano do „%@”.",
         "test.ok": "Test zakończony pomyślnie. Archiwum jest w porządku.",
         "test.fail": "Test zakończył się błędami.\n\n%@",
         "default.ok": "Unarchive otwiera teraz archiwa po dwukrotnym kliknięciu.",
         "default.fail": "macOS nie zmienił domyślnej aplikacji. Kliknij z Control → Otwórz w programie → Unarchive → Zawsze.",
         "close.archive": "Zamknij", "choose.folder": "Wybierz miejsce docelowe",
-        "pack.note": "Twórz ZIP, 7z, TAR, TAR.GZ, TAR.BZ2 lub TAR.XZ. Tworzenie RAR nie jest dostępne (format zastrzeżony).",
+        "progress.file": "Plik", "progress.to": "Cel", "progress.part": "Część",
+        "progress.files": "plik %d z %d", "progress.elapsed": "Czas %@",
+        "progress.eta": "Zostało ok. %@", "progress.eta.wait": "Obliczanie pozostałego czasu…",
+        "progress.expected": "Przewidywany rozmiar", "progress.about": "ok. %@",
+        "progress.speed": "Prędkość", "progress.source": "Zawartość", "progress.written": "Zapisano %@",
+        "pack.note": "Twórz ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2 lub TAR.XZ. RAR używa programu rar zainstalowanego na tym Macu.",
         "feature.multiselect": "Zaznaczanie wielu plików i przeciąganie do Findera",
         "feature.password": "Pytanie o hasło przy chronionych archiwach",
         "feature.context": "Kliknięcie z Control, by rozpakować, otworzyć lub sprawdzić",
@@ -755,14 +858,19 @@ enum L10n {
         "create.save": "アーカイブを保存", "create.failed": "アーカイブを作成できませんでした。",
         "create.done": "アーカイブを作成しました。", "column.name": "名前", "column.size": "サイズ",
         "column.packed": "圧縮後", "column.date": "変更日",
-        "reading": "アーカイブを読み込み中…", "extracting": "展開中…", "preparing": "準備中…",
+        "reading": "アーカイブを読み込み中…", "extracting": "展開中…", "packing": "圧縮中…", "pack.cancel": "中止", "preparing": "準備中…",
         "testing": "アーカイブをテスト中…", "extracted.to": "“%@” への展開が完了しました。",
         "test.ok": "テストに成功しました。アーカイブは正常です。",
         "test.fail": "テストでエラーがありました。\n\n%@",
         "default.ok": "ダブルクリックで Unarchive がアーカイブを開きます。",
         "default.fail": "macOS がデフォルトを変更しませんでした。右クリック → このアプリケーションで開く → Unarchive → 常に。",
         "close.archive": "閉じる", "choose.folder": "保存先を選択",
-        "pack.note": "ZIP、7z、TAR、TAR.GZ、TAR.BZ2、TAR.XZ を作成できます。RAR の作成は含まれません（独自形式）。",
+        "progress.file": "ファイル", "progress.to": "保存先", "progress.part": "ボリューム",
+        "progress.files": "ファイル %d / %d", "progress.elapsed": "経過 %@",
+        "progress.eta": "残り約 %@", "progress.eta.wait": "残り時間を計算中…",
+        "progress.expected": "予想サイズ", "progress.about": "約 %@",
+        "progress.speed": "速度", "progress.source": "内容", "progress.written": "書き込み済み %@",
+        "pack.note": "ZIP、7z、RAR、TAR、TAR.GZ、TAR.BZ2、TAR.XZ を作成できます。RAR はこの Mac に入っている rar を使います。",
         "feature.multiselect": "複数選択して Finder にドラッグ",
         "feature.password": "保護されたアーカイブではパスワードを要求",
         "feature.context": "右クリックで展開、表示、情報",
@@ -812,14 +920,19 @@ enum L10n {
         "create.save": "存储压缩包", "create.failed": "无法创建压缩包。",
         "create.done": "已创建压缩包。", "column.name": "名称", "column.size": "大小",
         "column.packed": "压缩后", "column.date": "修改时间",
-        "reading": "正在读取压缩包…", "extracting": "正在解压…", "preparing": "正在准备…",
+        "reading": "正在读取压缩包…", "extracting": "正在解压…", "packing": "正在打包…", "pack.cancel": "停止", "preparing": "正在准备…",
         "testing": "正在测试压缩包…", "extracted.to": "已解压到“%@”。",
         "test.ok": "测试成功，压缩包完好。",
         "test.fail": "测试完成，但存在错误。\n\n%@",
         "default.ok": "现在双击即可用 Unarchive 打开压缩包。",
         "default.fail": "macOS 未更改默认应用。按住 Control 点按 → 打开方式 → Unarchive → 始终。",
         "close.archive": "关闭", "choose.folder": "选择目标位置",
-        "pack.note": "可创建 ZIP、7z、TAR、TAR.GZ、TAR.BZ2 或 TAR.XZ。不包含创建 RAR（专有格式）。",
+        "progress.file": "文件", "progress.to": "目标", "progress.part": "分卷",
+        "progress.files": "第 %d 个，共 %d 个", "progress.elapsed": "已用 %@",
+        "progress.eta": "大约还需 %@", "progress.eta.wait": "正在估算剩余时间…",
+        "progress.expected": "预计大小", "progress.about": "约 %@",
+        "progress.speed": "速度", "progress.source": "内容", "progress.written": "已写入 %@",
+        "pack.note": "可创建 ZIP、7z、RAR、TAR、TAR.GZ、TAR.BZ2 或 TAR.XZ。RAR 使用这台 Mac 上已安装的 rar。",
         "feature.multiselect": "多选文件并拖到 Finder",
         "feature.password": "加密压缩包会提示输入密码",
         "feature.context": "按住 Control 点按即可解压、打开或查看信息",
@@ -830,5 +943,77 @@ enum L10n {
         "open.selection": "打开", "credits": "由 Shambhala222 创建和设计",
         "engine": "引擎：RAR 使用 UnRAR · ZIP 等使用 The Unarchiver · 使用 7-Zip 创建 7z",
         "legal": "本产品与 WinRAR 或 RARLAB 无关。"
+    ]
+
+    private static let ru: [String: String] = [
+        "created.by": "Создано Shambhala222",
+        "open": "Открыть", "open.archive": "Открыть архив…", "extract.to": "Извлечь в…",
+        "extract.here": "Распаковать рядом", "extract.folder": "Распаковать в папку", "test": "Проверить",
+        "search": "Поиск", "create": "Создать", "create.archive": "Создать архив…",
+        "settings": "Настройки", "about": "О программе",
+        "welcome.title": "Распакуйте любой архив",
+        "welcome.subtitle": "Перетащите RAR, ZIP, 7z или TAR. Можно вытащить файлы, распаковать или собрать новый архив.",
+        "drop.title": "Перетащите архив сюда", "drop.subtitle": "или выберите файл, чтобы посмотреть содержимое",
+        "formats.unpack": "Распаковка", "formats.pack": "Создание", "recent": "Недавние",
+        "recent.clear": "Очистить",
+        "password": "Пароль", "password.enter": "Введите пароль",
+        "password.protected": "«%@» защищён паролем.",
+        "password.wrong": "Неверный пароль. Попробуйте ещё раз.",
+        "password.needed.extract": "Для извлечения нужен пароль.",
+        "password.needed.open": "Чтобы открыть, нужен пароль.",
+        "password.needed.test": "Для проверки нужен пароль.",
+        "cancel": "Отмена", "unpack": "Распаковать", "wait": "Подождите…",
+        "notice": "Сообщение", "error": "Ошибка", "ok": "OK",
+        "status.idle": "Откройте архив или перетащите файл в это окно.",
+        "status.selected": "Выбрано %d · %d файлов · %@",
+        "status.listing": "%d файлов · %@ · %@",
+        "selection": "Выбор", "show.finder": "Показать в Finder", "copy.names": "Копировать имена",
+        "info": "Сведения", "set.default": "Открывать архивы в Unarchive",
+        "language": "Язык", "language.system": "Система", "appearance": "Оформление",
+        "appearance.system": "Система", "appearance.light": "Светлое", "appearance.dark": "Тёмное",
+        "general": "Общие", "extraction": "Распаковка", "creating": "Создание",
+        "reveal.after": "Показать папку в Finder после распаковки",
+        "default.format": "Формат для новых архивов",
+        "about.body": "Unarchive — программа macOS для просмотра, распаковки и создания архивов. Для Apple Silicon.",
+        "version": "Версия %@ (%@)", "copyright": "Copyright © 2026 Shambhala222. Все права защищены.",
+        "path": "Путь", "type": "Тип", "folder": "Папка", "file": "Файл", "files": "файлов",
+        "method": "Сжатие", "modified": "Изменён", "encrypted": "Зашифрован", "yes": "Да",
+        "not.supported": "«%@» не поддерживается.",
+        "create.choose": "Выберите файлы или папки",
+        "create.where": "Сохранить в", "create.pickfolder": "Выбрать папку…", "create.sources": "Содержимое",
+        "create.save": "Сохранить архив", "create.failed": "Не удалось создать архив.",
+        "create.done": "Архив создан.", "create.replace": "Файл с таким именем уже есть. Он будет заменён.",
+        "column.name": "Имя", "column.size": "Размер", "column.packed": "Сжатый", "column.date": "Изменён",
+        "reading": "Чтение архива…", "extracting": "Распаковка…", "packing": "Упаковка…",
+        "pack.cancel": "Остановить", "preparing": "Подготовка…",
+        "testing": "Проверка архива…", "extracted.to": "Распаковано в «%@».",
+        "test.ok": "Проверка прошла успешно. Архив цел.",
+        "test.fail": "Проверка завершилась с ошибками.\n\n%@",
+        "default.ok": "Теперь двойной щелчок открывает архивы в Unarchive.",
+        "default.fail": "macOS не сменил программу. Правый щелчок → Открыть с помощью → Unarchive → Всегда.",
+        "close.archive": "Закрыть", "choose.folder": "Куда сохранить",
+        "formats.pack.hint": "Нажмите формат, чтобы создать архив.",
+        "split.title": "Части", "split.none": "Один файл", "split.several": "Несколько частей",
+        "split.size": "Размер части", "split.binary": "1 ГБ = 1024 МБ.",
+        "split.note": "Части есть у ZIP, 7z и RAR. TAR остаётся одним файлом.",
+        "split.example": "Части выглядят так: %@.",
+        "rar.missing": "На этом Mac нет программы RAR. Unarchive её не включает.",
+        "rar.level": "Сжатие быстрое. Файлы всё равно становятся меньше, и это заметно быстрее максимального.",
+        "progress.file": "Файл", "progress.to": "Куда", "progress.part": "Том",
+        "progress.files": "файл %d из %d", "progress.elapsed": "Прошло %@",
+        "progress.eta": "Ещё около %@", "progress.eta.wait": "Считаю оставшееся время…",
+        "progress.expected": "Ожидаемый размер", "progress.about": "около %@",
+        "progress.speed": "Скорость", "progress.source": "Исходный размер", "progress.written": "Записано %@",
+        "pack.note": "Можно создать ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2 или TAR.XZ. RAR берёт программу rar, установленную на этом Mac.",
+        "feature.multiselect": "Можно выбрать несколько файлов и перетащить их в Finder",
+        "feature.password": "Для закрытых архивов спросит пароль",
+        "feature.context": "Правый щелчок: распаковать, открыть или сведения",
+        "helper.missing": "Не найден модуль распаковки.",
+        "list.failed": "Не удалось прочитать архив.", "extract.failed": "Не удалось распаковать.",
+        "not.an.archive": "Этот файл не поддерживается.",
+        "invalid.listing": "Архив ответил неверно.", "no.recent": "Недавних архивов нет.",
+        "open.selection": "Открыть", "credits": "Создал и оформил Shambhala222",
+        "engine": "Движок: UnRAR для RAR · The Unarchiver для ZIP и других · 7-Zip для создания 7z",
+        "legal": "Это не продукт WinRAR или RARLAB."
     ]
 }

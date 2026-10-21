@@ -198,8 +198,11 @@ struct ArchiveOutlineView: NSViewRepresentable {
             }
         }
 
-        func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
-            NSTableRowView()
+        @objc func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+            let id = NSUserInterfaceItemIdentifier("hover-row")
+            let row = outlineView.makeView(withIdentifier: id, owner: self) as? HoverRowView ?? HoverRowView()
+            row.identifier = id
+            return row
         }
 
         func outlineViewSelectionDidChange(_ notification: Notification) {
@@ -382,6 +385,56 @@ struct ArchiveOutlineView: NSViewRepresentable {
             }
             return NSWorkspace.shared.icon(for: .data)
         }
+    }
+}
+
+final class HoverRowView: NSTableRowView {
+    private var hovering = false
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas {
+            removeTrackingArea(area)
+        }
+        addTrackingArea(NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        setHover(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        setHover(false)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil {
+            setHover(false)
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard hovering, !isSelected else { return }
+        NSColor.controlAccentColor.withAlphaComponent(0.16).setFill()
+        bounds.fill()
+    }
+
+    private func setHover(_ on: Bool) {
+        guard hovering != on else { return }
+        hovering = on
+        if on {
+            PointingHand.enter()
+        } else {
+            PointingHand.leave()
+        }
+        needsDisplay = true
     }
 }
 

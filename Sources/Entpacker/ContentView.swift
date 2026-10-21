@@ -24,11 +24,13 @@ struct ContentView: View {
         .toolbar { toolbarContent }
         .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted, perform: handleDrop)
         .overlay {
-            if state.isLoading || state.isExtracting {
+            if state.isBusy {
                 ProgressOverlay(
+                    title: state.activityTitle.isEmpty ? L10n.t("wait") : state.activityTitle,
                     progress: state.extractProgress,
                     fallback: state.progressText,
                     showsCancel: true,
+                    cancelTitle: state.isPacking ? L10n.t("pack.cancel") : L10n.t("extract.cancel"),
                     onCancel: { state.cancelWork() }
                 )
             }
@@ -54,6 +56,11 @@ struct ContentView: View {
         }
         .frame(minWidth: 840, minHeight: 560)
         .id(settings.revision)
+        .sheet(isPresented: $state.showCreateSheet) {
+            CreateArchiveSheet()
+                .environment(state)
+                .environment(settings)
+        }
     }
 
     @ToolbarContentBuilder
@@ -66,6 +73,7 @@ struct ContentView: View {
                     Label(L10n.t("close.archive"), systemImage: "xmark")
                 }
                 .help(L10n.t("close.archive"))
+                .pointingHand()
             }
         }
 
@@ -74,34 +82,43 @@ struct ContentView: View {
                 state.openArchive()
             }
             .help(L10n.t("open.archive"))
+            .pointingHand()
 
             Button(L10n.t("extract.to"), systemImage: "square.and.arrow.down") {
                 state.extractSelected(to: nil, createFolder: nil, reveal: settings.revealAfterExtract)
             }
-            .disabled(!state.hasArchive || state.isExtracting)
+            .disabled(!state.hasArchive || state.isBusy)
             .help(L10n.t("extract.to.help"))
+            .pointingHand()
 
             Button(L10n.t("extract.here"), systemImage: "tray.and.arrow.down") {
                 state.extractHere(createFolder: false)
             }
-            .disabled(!state.hasArchive || state.isExtracting)
+            .disabled(!state.hasArchive || state.isBusy)
             .help(L10n.t("extract.here.help"))
+            .pointingHand()
 
             Button(L10n.t("extract.folder"), systemImage: "folder.badge.plus") {
                 state.extractHere(createFolder: true)
             }
-            .disabled(!state.hasArchive || state.isExtracting)
+            .disabled(!state.hasArchive || state.isBusy)
             .help(L10n.t("extract.folder.help"))
+            .pointingHand()
 
             Button(L10n.t("test"), systemImage: "checkmark.seal") {
                 state.testArchive()
             }
-            .disabled(!state.hasArchive)
+            .disabled(!state.hasArchive || state.isBusy)
+            .pointingHand()
 
-            Button(L10n.t("create"), systemImage: "plus.square.on.square") {
-                state.createArchive()
+            if state.hasArchive {
+                Button(L10n.t("create"), systemImage: "plus.square.on.square") {
+                    state.createArchive()
+                }
+                .disabled(state.isBusy)
+                .help(L10n.t("create.archive"))
+                .pointingHand()
             }
-            .help(L10n.t("create.archive"))
         }
 
         ToolbarItem(placement: .automatic) {
@@ -209,8 +226,10 @@ struct WelcomeView: View {
                     Button(L10n.t("open.archive")) { state.openArchive() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
+                        .pointingHand()
                     Button(L10n.t("create.archive")) { state.createArchive() }
                         .controlSize(.large)
+                        .pointingHand()
                 }
 
                 formatSection
@@ -260,12 +279,33 @@ struct WelcomeView: View {
     private var formatSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             formatRow(title: L10n.t("formats.unpack"), chips: SupportedArchives.unpackChips)
-            formatRow(title: L10n.t("formats.pack"), chips: SupportedArchives.packChips)
+            packFormatRow
+            Text(L10n.t("formats.pack.hint"))
+                .font(.caption)
+                .foregroundStyle(.tertiary)
             Text(L10n.t("pack.note"))
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var packFormatRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.t("formats.pack").uppercased())
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            EvenWrap(spacing: 8) {
+                ForEach(CreateFormat.allCases) { format in
+                    Button(format.title) {
+                        state.createArchive(preferred: format)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .pointingHand()
+                }
+            }
+        }
     }
 
     private func formatRow(title: String, chips: [String]) -> some View {
@@ -280,9 +320,20 @@ struct WelcomeView: View {
     @ViewBuilder
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(L10n.t("recent").uppercased())
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+            HStack {
+                Text(L10n.t("recent").uppercased())
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !settings.recents.isEmpty {
+                    Button(L10n.t("recent.clear")) {
+                        settings.clearRecents()
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .pointingHand()
+                }
+            }
             if settings.recents.isEmpty {
                 Text(L10n.t("no.recent"))
                     .foregroundStyle(.tertiary)
@@ -306,6 +357,7 @@ struct WelcomeView: View {
                         .padding(.vertical, 6)
                     }
                     .buttonStyle(.plain)
+                    .pointingHand()
                 }
             }
         }
@@ -352,9 +404,11 @@ struct PasswordSheet: View {
                     state.pendingExtract = nil
                 }
                 .keyboardShortcut(.cancelAction)
+                .pointingHand()
                 Button(L10n.t("unpack")) { submit() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(value.isEmpty)
+                    .pointingHand()
             }
         }
         .padding(24)
@@ -369,16 +423,18 @@ struct PasswordSheet: View {
 }
 
 struct ProgressOverlay: View {
+    var title: String = ""
     let progress: ExtractProgress
     let fallback: String
     var showsCancel: Bool = false
+    var cancelTitle: String = ""
     var onCancel: () -> Void = {}
 
     var body: some View {
         ZStack {
             Color.black.opacity(0.18)
             VStack(alignment: .leading, spacing: 14) {
-                Text(L10n.t("extracting"))
+                Text(title.isEmpty ? L10n.t("wait") : title)
                     .font(.headline)
                 if progress.isDeterminate {
                     ProgressView(value: min(max(progress.fraction, 0), 1))
@@ -404,6 +460,15 @@ struct ProgressOverlay: View {
                 if !progress.volume.isEmpty {
                     infoRow(L10n.t("progress.part"), (progress.volume as NSString).lastPathComponent)
                 }
+                if progress.estimatesArchive, progress.bytesTotal > 0 {
+                    infoRow(L10n.t("progress.source"), Formatters.bytes(progress.bytesTotal))
+                }
+                if progress.expectedBytes > 0 {
+                    infoRow(L10n.t("progress.expected"), L10n.t("progress.about", Formatters.bytes(progress.expectedBytes)))
+                }
+                if progress.bytesPerSecond > 1 {
+                    infoRow(L10n.t("progress.speed"), "\(Formatters.bytes(Int64(progress.bytesPerSecond)))/s")
+                }
                 Text(sizeLabel)
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -413,8 +478,9 @@ struct ProgressOverlay: View {
                 if showsCancel {
                     HStack {
                         Spacer()
-                        Button(L10n.t("extract.cancel"), role: .cancel, action: onCancel)
+                        Button(cancelTitle.isEmpty ? L10n.t("extract.cancel") : cancelTitle, role: .cancel, action: onCancel)
                             .keyboardShortcut(.cancelAction)
+                            .pointingHand()
                     }
                     .padding(.top, 4)
                 }
@@ -436,7 +502,11 @@ struct ProgressOverlay: View {
 
     private var sizeLabel: String {
         var parts: [String] = []
-        if progress.bytesTotal > 0 {
+        if progress.estimatesArchive {
+            if progress.bytesDone > 0 {
+                parts.append(L10n.t("progress.written", Formatters.bytes(progress.bytesDone)))
+            }
+        } else if progress.bytesTotal > 0 {
             parts.append("\(Formatters.bytes(progress.bytesDone)) / \(Formatters.bytes(progress.bytesTotal))")
         }
         if progress.filesTotal > 0 {

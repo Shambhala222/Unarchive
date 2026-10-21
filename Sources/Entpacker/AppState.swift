@@ -13,6 +13,8 @@ final class AppState {
     var searchText: String = ""
     var isLoading = false
     var isExtracting = false
+    var isPacking = false
+    var activityTitle = ""
     var progressText = ""
     var extractProgress = ExtractProgress.idle
     var errorMessage: String?
@@ -23,8 +25,21 @@ final class AppState {
     var pendingExtract: PendingExtract?
     var showExtractSuccess = false
     var lastExtractedFolder: URL?
+    var showCreateSheet = false
+    var createSources: [URL] = []
+    var createFolder: URL?
+    var createName = ""
+    var createFormat: CreateFormat = .zip
+    var createParts = false
+    var createPartAmount = ""
+    var createPartUnit: PartUnit = .mb
     private var dragExtractItems: [ExtractItem] = []
     private var dropExtractDirectory: URL?
+    private var operation = 0
+    private var activeOpenPath: String?
+    private var scanInFlight = false
+
+    var isBusy: Bool { isLoading || isExtracting || isPacking }
 
     struct PendingExtract {
         var archive: URL
@@ -93,8 +108,129 @@ final class AppState {
         ArchiveEngine.cancelActive()
     }
 
-    func createArchive() {
-        ArchiveCreator.createInteractive(format: SettingsStore.shared.defaultCreateFormat)
+    func createArchive(preferred: CreateFormat? = nil) {
+        guard !isBusy else {
+            errorMessage = L10n.t("extract.busy")
+            return
+        }
+        guard let urls = ArchiveCreator.chooseSources() else { return }
+        presentCreate(urls, preferred: preferred)
+    }
+
+    func presentCreate(_ urls: [URL], preferred: CreateFormat?) {
+        guard !urls.isEmpty else { return }
+        guard !isBusy else {
+            errorMessage = L10n.t("extract.busy")
+            return
+        }
+        let format = preferred ?? SettingsStore.shared.defaultCreateFormat
+        createSources = urls
+        createFolder = urls[0].deletingLastPathComponent()
+        createFormat = format
+        createParts = false
+        createPartAmount = ""
+        createPartUnit = .mb
+        createName = ArchiveCreator.proposedName(for: urls, format: format)
+        showCreateSheet = true
+    }
+
+    func commitCreate() {
+        let format = createFormat
+        let volumeBytes = resolvedPartBytes
+        var name = createName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, let folder = createFolder, !createSources.isEmpty else { return }
+        if format.supportsSplit, createParts, volumeBytes == nil { return }
+        if format == .rar, !ArchiveCreator.rarAvailable {
+            errorMessage = L10n.t("rar.missing")
+            return
+        }
+        name = ArchiveCreator.name(keepingBaseOf: name, format: format)
+        let destination = folder.appendingPathComponent(name)
+        let urls = createSources
+        showCreateSheet = false
+        SettingsStore.shared.defaultCreateFormat = format
+        Task { await pack(urls: urls, to: destination, format: format, volumeBytes: volumeBytes, reveal: true) }
+    }
+
+    func packNextTo(_ urls: [URL]) async {
+        presentCreate(urls, preferred: SettingsStore.shared.defaultCreateFormat)
+    }
+
+    var resolvedPartBytes: Int64? {
+        guard createFormat.supportsSplit, createParts else { return nil }
+        let text = createPartAmount
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(text), value > 0, value.isFinite else { return nil }
+        let bytes = value * Double(createPartUnit.bytes)
+        guard bytes >= 1_048_576, bytes < Double(Int64.max) else { return nil }
+        return Int64(bytes)
+    }
+
+    func pack(urls: [URL], to destination: URL, format: CreateFormat, volumeBytes: Int64? = nil, reveal: Bool) async {
+        let op = nextOperation()
+        isPacking = true
+        isLoading = false
+        isExtracting = false
+        activityTitle = L10n.t("packing")
+        progressText = L10n.t("packing")
+        errorMessage = nil
+        let started = Date()
+        extractProgress = ExtractProgress(
+            destination: destination.path,
+            archiveName: destination.lastPathComponent,
+            statusLine: L10n.t("preparing")
+        )
+        defer { finish(op) }
+        do {
+            try await ArchiveCreator.create(from: urls, to: destination, format: format, volumeBytes: volumeBytes) { update in
+                Task { @MainActor in
+                    guard self.operation == op else { return }
+                    var current = self.extractProgress
+                    current.currentFile = update.file
+                    current.statusLine = update.file.isEmpty ? L10n.t("packing") : update.file
+                    current.fraction = update.fraction
+                    current.isDeterminate = update.fraction > 0 || update.filesTotal > 0
+                    current.bytesDone = update.bytesDone
+                    current.bytesTotal = max(update.bytesTotal, current.bytesTotal)
+                    current.filesDone = update.filesDone
+                    current.filesTotal = update.filesTotal
+                    current.estimatesArchive = true
+                    current.elapsed = Date().timeIntervalSince(started)
+                    if update.fraction > 0.015, current.elapsed >= 1, update.fraction < 1 {
+                        let remaining = current.elapsed * (1 - update.fraction) / update.fraction
+                        current.eta = remaining.isFinite && remaining >= 0 ? remaining : nil
+                        if update.bytesDone > 0 {
+                            let raw = Double(update.bytesDone) / update.fraction
+                            if current.expectedBytes == 0 {
+                                current.expectedBytes = Int64(raw)
+                            } else {
+                                current.expectedBytes = Int64(Double(current.expectedBytes) * 0.65 + raw * 0.35)
+                            }
+                            current.bytesPerSecond = Double(update.bytesDone) / current.elapsed
+                        }
+                    }
+                    self.extractProgress = current
+                    self.progressText = current.statusLine
+                }
+            }
+            guard operation == op else { return }
+            let made = ArchiveCreator.producedFiles(at: destination)
+            if made.count > 1 {
+                infoMessage = L10n.t("packed.parts", made.count, destination.deletingLastPathComponent().path)
+            } else {
+                infoMessage = L10n.t("packed.to.time", destination.path, Formatters.duration(Date().timeIntervalSince(started)))
+            }
+            if reveal {
+                NSWorkspace.shared.activateFileViewerSelecting(made.isEmpty ? [destination] : made)
+            }
+        } catch ArchiveError.cancelled {
+            guard operation == op else { return }
+            infoMessage = L10n.t("extract.cancelled")
+        } catch {
+            guard operation == op else { return }
+            errorMessage = error.localizedDescription
+        }
     }
 
     func openArchive() {
@@ -114,7 +250,24 @@ final class AppState {
             return
         }
 
+        let resolvedEarly = ArchiveEngine.firstVolume(for: url)
+        let openKey = resolvedEarly.standardizedFileURL.path
+        if activeOpenPath == openKey { return }
+        if override == nil,
+           listing != nil,
+           archiveURL?.standardizedFileURL.path == openKey {
+            return
+        }
+
+        let op = nextOperation()
+        activeOpenPath = openKey
+        if isExtracting || isPacking {
+            cancelWork()
+        }
+        isPacking = false
+        isExtracting = false
         isLoading = true
+        activityTitle = L10n.t("reading")
         errorMessage = nil
         progressText = L10n.t("reading")
         extractProgress = ExtractProgress(
@@ -124,9 +277,13 @@ final class AppState {
             statusLine: L10n.t("reading")
         )
         defer {
-            isLoading = false
-            if !isExtracting {
-                extractProgress = .idle
+            if activeOpenPath == openKey { activeOpenPath = nil }
+            if operation == op {
+                isLoading = false
+                if !isExtracting && !isPacking {
+                    extractProgress = .idle
+                    activityTitle = ""
+                }
             }
         }
 
@@ -136,19 +293,30 @@ final class AppState {
         if usedPassword.isEmpty {
             do {
                 let result = try await ArchiveEngine.list(resolved, password: nil)
+                guard operation == op else { return }
                 applyOpened(result, url: resolved, password: "")
+                return
+            } catch ArchiveError.cancelled {
+                guard operation == op else { return }
+                infoMessage = L10n.t("extract.cancelled")
                 return
             } catch ArchiveError.passwordRequired, ArchiveError.wrongPassword {
                 if SettingsStore.shared.rememberPasswords {
                     extractProgress.statusLine = L10n.t("password.trying")
                     progressText = L10n.t("password.trying")
                     for saved in PasswordVault.recent() {
+                        if operation != op || ArchiveEngine.isCancelled {
+                            guard operation == op else { return }
+                            infoMessage = L10n.t("extract.cancelled")
+                            return
+                        }
                         if await ArchiveEngine.acceptsPassword(resolved, password: saved) {
                             usedPassword = saved
                             break
                         }
                     }
                 }
+                guard operation == op else { return }
                 if usedPassword.isEmpty {
                     password = ""
                     pendingOpenURL = resolved
@@ -157,6 +325,7 @@ final class AppState {
                     return
                 }
             } catch {
+                guard operation == op else { return }
                 errorMessage = error.localizedDescription
                 return
             }
@@ -164,11 +333,16 @@ final class AppState {
 
         do {
             let result = try await ArchiveEngine.list(resolved, password: usedPassword.isEmpty ? nil : usedPassword)
+            guard operation == op else { return }
             applyOpened(result, url: resolved, password: usedPassword)
             if !usedPassword.isEmpty, SettingsStore.shared.rememberPasswords {
                 PasswordVault.remember(usedPassword)
             }
+        } catch ArchiveError.cancelled {
+            guard operation == op else { return }
+            infoMessage = L10n.t("extract.cancelled")
         } catch ArchiveError.passwordRequired, ArchiveError.wrongPassword {
+            guard operation == op else { return }
             password = ""
             pendingOpenURL = resolved
             passwordPrompt = (override != nil) || !usedPassword.isEmpty
@@ -176,6 +350,7 @@ final class AppState {
                 : L10n.t("password.protected", resolved.lastPathComponent)
             showPasswordSheet = true
         } catch {
+            guard operation == op else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -255,7 +430,8 @@ final class AppState {
 
     func extract(archive url: URL, mode: FinderExtractMode, destination: URL? = nil) async {
         await open(url)
-        guard listing != nil else { return }
+        let opened = ArchiveEngine.firstVolume(for: url).standardizedFileURL.path
+        guard listing != nil, archiveURL?.standardizedFileURL.path == opened else { return }
 
         let dest: URL
         if let destination {
@@ -291,11 +467,13 @@ final class AppState {
     }
 
     func extract(_ job: PendingExtract, password usedPassword: String) async {
-        if isExtracting {
+        if isExtracting || isPacking {
             errorMessage = L10n.t("extract.busy")
             return
         }
+        let op = nextOperation()
         isExtracting = true
+        activityTitle = L10n.t("extracting")
         progressText = L10n.t("extracting")
         errorMessage = nil
         pendingExtract = nil
@@ -307,14 +485,12 @@ final class AppState {
             bytesTotal: listing?.totalUncompressed ?? 0,
             filesTotal: listing?.fileCount ?? 0
         )
-        defer {
-            isExtracting = false
-            extractProgress = .idle
-        }
+        defer { finish(op) }
 
         let started = Date()
         do {
             try await runExtract(job, password: usedPassword)
+            guard operation == op else { return }
             lastExtractedFolder = job.destination
             password = usedPassword
             if !usedPassword.isEmpty, SettingsStore.shared.rememberPasswords {
@@ -325,14 +501,17 @@ final class AppState {
                 reveal(job.destination)
             }
         } catch ArchiveError.cancelled {
+            guard operation == op else { return }
             infoMessage = L10n.t("extract.cancelled")
         } catch ArchiveError.passwordRequired, ArchiveError.wrongPassword {
+            guard operation == op else { return }
             password = ""
             pendingExtract = job
             pendingOpenURL = nil
             passwordPrompt = L10n.t("password.needed.extract")
             showPasswordSheet = true
         } catch {
+            guard operation == op else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -391,6 +570,7 @@ final class AppState {
         sizes: [String: Int64]
     ) async throws {
         isExtracting = true
+        activityTitle = L10n.t("extracting")
         errorMessage = nil
         extractProgress = ExtractProgress(
             isDeterminate: bytes > 0 || files > 0,
@@ -400,8 +580,10 @@ final class AppState {
             bytesTotal: bytes > 0 ? bytes : (listing?.totalUncompressed ?? 0),
             filesTotal: files > 0 ? files : (listing?.fileCount ?? 0)
         )
-        defer { isExtracting = false }
+        let op = nextOperation()
+        defer { finish(op) }
         try await runExtract(job, password: usedPassword, bytesTotal: bytes, filesTotal: files, sizes: sizes)
+        guard operation == op else { return }
         lastExtractedFolder = job.destination
         password = usedPassword
     }
@@ -415,7 +597,10 @@ final class AppState {
     ) async throws {
         let map = sizes ?? fileSizeMap()
         try? FileManager.default.createDirectory(at: job.destination, withIntermediateDirectories: true)
-        let baseline = ArchiveEngine.allocatedBytes(at: job.destination)
+        let destination = job.destination
+        let baseline = await Task.detached(priority: .utility) {
+            ArchiveEngine.allocatedBytes(at: destination)
+        }.value
         let total = bytesTotal ?? listing?.totalUncompressed ?? 0
         let started = Date()
         let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -459,7 +644,21 @@ final class AppState {
     private func refreshExtractProgress(destination: URL, baseline: Int64, totalBytes: Int64, started: Date) {
         var current = extractProgress
         current.elapsed = Date().timeIntervalSince(started)
-        let written = max(0, ArchiveEngine.allocatedBytes(at: destination) - baseline)
+        extractProgress = current
+        guard !scanInFlight else { return }
+        scanInFlight = true
+        let op = operation
+        Task.detached(priority: .utility) { [weak self] in
+            let written = max(0, ArchiveEngine.allocatedBytes(at: destination) - baseline)
+            await self?.applyScannedBytes(written, operation: op, totalBytes: totalBytes, started: started)
+        }
+    }
+
+    private func applyScannedBytes(_ written: Int64, operation op: Int, totalBytes: Int64, started: Date) {
+        scanInFlight = false
+        guard operation == op, isExtracting else { return }
+        var current = extractProgress
+        current.elapsed = Date().timeIntervalSince(started)
         if written > current.bytesDone {
             current.bytesDone = written
         }
@@ -475,6 +674,20 @@ final class AppState {
             current.eta = nil
         }
         extractProgress = current
+    }
+
+    private func nextOperation() -> Int {
+        operation &+= 1
+        return operation
+    }
+
+    private func finish(_ op: Int) {
+        guard operation == op else { return }
+        isLoading = false
+        isExtracting = false
+        isPacking = false
+        extractProgress = .idle
+        activityTitle = ""
     }
 
     private func fileSizeMap() -> [String: Int64] {
@@ -501,9 +714,11 @@ final class AppState {
     }
 
     func preview(_ node: ArchiveNode, from archive: URL, open: Bool) async {
+        let op = nextOperation()
         isExtracting = true
+        activityTitle = L10n.t("preparing")
         progressText = L10n.t("preparing")
-        defer { isExtracting = false }
+        defer { finish(op) }
         do {
             let temp = FileManager.default.temporaryDirectory
                 .appendingPathComponent("UnarchivePreview-\(UUID().uuidString)", isDirectory: true)
@@ -524,9 +739,11 @@ final class AppState {
                 NSWorkspace.shared.activateFileViewerSelecting([item])
             }
         } catch ArchiveError.passwordRequired, ArchiveError.wrongPassword {
+            guard operation == op else { return }
             passwordPrompt = L10n.t("password.needed.open")
             showPasswordSheet = true
         } catch {
+            guard operation == op else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -534,9 +751,11 @@ final class AppState {
     func testArchive() {
         guard let archiveURL else { return }
         Task {
+            let op = nextOperation()
             isLoading = true
+            activityTitle = L10n.t("testing")
             progressText = L10n.t("testing")
-            defer { isLoading = false }
+            defer { finish(op) }
             do {
                 let output = try await ArchiveEngine.test(
                     archive: archiveURL,
@@ -547,11 +766,14 @@ final class AppState {
                     ? L10n.t("test.fail", output)
                     : L10n.t("test.ok")
             } catch ArchiveError.cancelled {
+                guard operation == op else { return }
                 infoMessage = L10n.t("extract.cancelled")
             } catch ArchiveError.passwordRequired, ArchiveError.wrongPassword {
+                guard operation == op else { return }
                 passwordPrompt = L10n.t("password.needed.test")
                 showPasswordSheet = true
             } catch {
+                guard operation == op else { return }
                 errorMessage = error.localizedDescription
             }
         }

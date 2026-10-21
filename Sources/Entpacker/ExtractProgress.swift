@@ -14,6 +14,9 @@ struct ExtractProgress: Sendable, Equatable {
     var filesTotal: Int = 0
     var elapsed: TimeInterval = 0
     var eta: TimeInterval?
+    var expectedBytes: Int64 = 0
+    var bytesPerSecond: Double = 0
+    var estimatesArchive: Bool = false
 
     static let idle = ExtractProgress()
 

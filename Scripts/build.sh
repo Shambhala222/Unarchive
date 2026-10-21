@@ -64,7 +64,11 @@ fi
 
 echo "→ App-Icon einbauen"
 ICON_PNG="$DIST/AppIcon.png"
-swift "$ROOT/Scripts/generate_icon.swift" "$ICON_PNG"
+if [[ -f "$ROOT/Resources/AppIcon.png" ]]; then
+  cp "$ROOT/Resources/AppIcon.png" "$ICON_PNG"
+else
+  swift "$ROOT/Scripts/generate_icon.swift" "$ICON_PNG"
+fi
 sips -z 16 16     "$ICON_PNG" --out "$ICONSET/icon_16x16.png" >/dev/null
 sips -z 32 32     "$ICON_PNG" --out "$ICONSET/icon_16x16@2x.png" >/dev/null
 sips -z 32 32     "$ICON_PNG" --out "$ICONSET/icon_32x32.png" >/dev/null
@@ -90,12 +94,14 @@ Unarchive
 Created by Shambhala222
 
 1. Drag Unarchive onto Applications.
-2. Open Unarchive once.
+2. If Gatekeeper blocks it, right-click Unarchive and choose Open.
 3. Unarchive → Settings to pick language, appearance and default formats.
 4. File → Use Unarchive for Archives to open RAR/ZIP/7z on double-click.
 
 Unpack: RAR, ZIP, 7z, TAR, GZ, BZ2, XZ, ISO, CAB, LHA and more.
-Create: ZIP, 7z, TAR, TAR.GZ, TAR.BZ2, TAR.XZ.
+Create: ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2, TAR.XZ.
+RAR uses the rar program installed on the Mac.
+ZIP, 7z and RAR can be split into parts.
 
 RAR volumes (including encrypted RAR 5 / WinRAR 7) are unpacked with UnRAR.
 Password-protected archives ask for a key.

@@ -50,6 +50,11 @@ final class SettingsStore {
         UserDefaults.standard.set(recents.map(\.path), forKey: Self.recentsKey)
     }
 
+    func clearRecents() {
+        recents = []
+        UserDefaults.standard.removeObject(forKey: Self.recentsKey)
+    }
+
     func bump() {
         revision += 1
     }

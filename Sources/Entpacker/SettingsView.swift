@@ -39,6 +39,7 @@ struct SettingsView: View {
             Button(L10n.t("set.default")) {
                 NotificationCenter.default.post(name: .unarchiveBecomeDefault, object: nil)
             }
+            .pointingHand()
         }
         .formStyle(.grouped)
         .padding()
@@ -134,6 +135,7 @@ private struct PasswordArchiveView: View {
                         .onSubmit { addPassword() }
                     Button(L10n.t("password.add")) { addPassword() }
                         .disabled(newPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .pointingHand()
                 }
             } header: {
                 Text(L10n.t("password.teach"))
@@ -169,6 +171,7 @@ private struct PasswordArchiveView: View {
                             }
                             .buttonStyle(.borderless)
                             .help(revealed.contains(item) ? L10n.t("password.hide") : L10n.t("password.show"))
+                            .pointingHand()
 
                             Button(role: .destructive) {
                                 PasswordVault.remove(item)
@@ -179,6 +182,7 @@ private struct PasswordArchiveView: View {
                             }
                             .buttonStyle(.borderless)
                             .help(L10n.t("password.delete"))
+                            .pointingHand()
                         }
                     }
                     Button(L10n.t("password.clear"), role: .destructive) {
@@ -186,6 +190,7 @@ private struct PasswordArchiveView: View {
                         revealed.removeAll()
                         reload()
                     }
+                    .pointingHand()
                 }
             } header: {
                 Text(L10n.t("password.saved.count", saved.count))

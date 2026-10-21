@@ -166,7 +166,7 @@ enum SupportedArchives {
     static let unpackSummary = "RAR, ZIP, 7z, TAR, GZ, BZ2, XZ, ISO, CAB, LHA, JAR, ARJ, CPIO, RPM, DEB"
 
     static let unpackChips = ["RAR", "ZIP", "7z", "TAR", "GZ", "BZ2", "XZ", "ISO", "CAB", "LHA"]
-    static let packChips = ["ZIP", "7z", "TAR", "TAR.GZ", "TAR.BZ2", "TAR.XZ"]
+    static let packChips = CreateFormat.allCases.map(\.title)
 
     static func isArchive(_ url: URL) -> Bool {
         let ext = url.pathExtension.lowercased()

@@ -15,6 +15,22 @@ enum ArchiveEngine {
         ProcessRegistry.cancel()
     }
 
+    static func prepareWork() {
+        ProcessRegistry.reset()
+    }
+
+    static var isCancelled: Bool {
+        ProcessRegistry.isCancelled
+    }
+
+    static func adopt(_ process: Process) throws {
+        try ProcessRegistry.attach(process)
+    }
+
+    static func release(_ process: Process) {
+        ProcessRegistry.detach(process)
+    }
+
     static func extract(
         archive: URL,
         password: String?,
@@ -176,9 +192,13 @@ enum ArchiveEngine {
 
         static func reset() {
             lock.lock()
+            let previous = process
             cancelled = false
             process = nil
             lock.unlock()
+            if let previous, previous.isRunning {
+                previous.terminate()
+            }
         }
 
         static func attach(_ process: Process) throws {
