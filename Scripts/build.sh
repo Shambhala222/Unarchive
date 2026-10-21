@@ -94,9 +94,12 @@ Unarchive
 Created by Shambhala222
 
 1. Drag Unarchive onto Applications.
-2. If Gatekeeper blocks it, right-click Unarchive and choose Open.
-3. Unarchive → Settings to pick language, appearance and default formats.
-4. File → Use Unarchive for Archives to open RAR/ZIP/7z on double-click.
+2. First launch: System Settings → Privacy & Security → Security → Open Anyway.
+3. A second dialog appears (Move to Bin / Open Anyway / Done). Click Open Anyway.
+4. Confirm with Touch ID or your password.
+5. After that, a normal double-click opens the app. macOS will not ask again.
+6. Unarchive → Settings to pick language, appearance and default formats.
+7. File → Use Unarchive for Archives to open RAR/ZIP/7z on double-click.
 
 Unpack: RAR, ZIP, 7z, TAR, GZ, BZ2, XZ, ISO, CAB, LHA and more.
 Create: ZIP, 7z, RAR, TAR, TAR.GZ, TAR.BZ2, TAR.XZ.

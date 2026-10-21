@@ -12,7 +12,15 @@ RAR goes through UnRAR. 7z extract uses 7-Zip. Everything else uses The Unarchiv
 
 Grab the latest `.dmg` from [Releases](https://github.com/Shambhala222/Unarchive/releases), drop Unarchive into Applications.
 
-The build is ad-hoc signed. First launch: right-click the app, choose Open.
+The build is ad-hoc signed and is not Apple-notarized. After a GitHub download, macOS may block the app. That is Gatekeeper, not a broken download. Unlock it once:
+
+1. Open **System Settings → Privacy & Security**.
+2. Scroll down to the **Security** section.
+3. macOS shows that the app was blocked to protect your Mac. Click **Open Anyway** next to that message.
+4. A second dialog appears (**Move to Bin** / **Open Anyway** / **Done**). Click **Open Anyway**.
+5. Confirm with Touch ID or your password. The app then opens.
+
+After that you can always open the app with a normal double-click. macOS will not show these warnings again.
 
 Under **Unarchive → Settings** you can pick language and appearance. **File → Use Unarchive for Archives** makes it the default for RAR / ZIP / 7z and similar.
 
